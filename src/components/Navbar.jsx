@@ -9,9 +9,8 @@ import {
   HiXMark, 
   HiOutlineGlobeAlt, 
   HiOutlineMap, 
-  HiOutlineBookmark, 
-  HiOutlinePlusCircle,
   HiOutlineUser,
+  HiOutlineSquares2X2,
   HiOutlineArrowRightOnRectangle,
   HiOutlineArrowLeftOnRectangle
 } from "react-icons/hi2";
@@ -45,8 +44,7 @@ const Navbar = () => {
   const navLinks = [
     { name: "Home", href: "/", icon: HiOutlineGlobeAlt },
     { name: "Destinations", href: "/destinations", icon: HiOutlineMap },
-    { name: "My Bookings", href: "/my-bookings", icon: HiOutlineBookmark },
-    { name: "Add Destination", href: "/add-destination", icon: HiOutlinePlusCircle },
+    ...(user ? [{ name: "Dashboard", href: "/dashboard", icon: HiOutlineSquares2X2 }] : []),
   ];
 
   return (
@@ -80,7 +78,7 @@ const Navbar = () => {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs xl:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs xl:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
                     isActive
                       ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-500/25 font-semibold"
                       : "text-slate-300 hover:text-white hover:bg-white/5"
