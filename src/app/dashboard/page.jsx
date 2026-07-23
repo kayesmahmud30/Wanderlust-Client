@@ -17,18 +17,29 @@ import {
   HiOutlinePlusCircle, 
   HiOutlineArrowRight,
   HiOutlineShieldCheck,
-  HiOutlineArrowRightOnRectangle
+  HiOutlineArrowRightOnRectangle,
+  HiOutlineUsers,
+  HiOutlineMap,
+  HiOutlineTrash,
+  HiOutlineUserGroup,
+  HiOutlineCheckBadge
 } from "react-icons/hi2";
 
 const DashboardPage = () => {
   const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
   const user = session?.user;
+  const isAdmin = user?.role === "admin";
 
-  const [activeTab, setActiveTab] = useState("overview"); // "overview" | "bookings"
+  const [activeTab, setActiveTab] = useState("overview"); // "overview" | "bookings" | "users" | "all-bookings"
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  
+  // Data States
   const [bookings, setBookings] = useState([]);
-  const [loadingBookings, setLoadingBookings] = useState(true);
+  const [allBookings, setAllBookings] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
+  const [destinationsCount, setDestinationsCount] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   // Private Route Auth Check
   useEffect(() => {
@@ -37,38 +48,90 @@ const DashboardPage = () => {
     }
   }, [user, isPending, router]);
 
-  // Fetch User Bookings when user is logged in
-  const fetchBookings = async () => {
-    if (user?.id) {
-      try {
-        const { data: tokenData } = await authClient.token();
-        const res = await fetch(
+  // Fetch Dashboard Data
+  const fetchData = async () => {
+    if (!user) return;
+    setLoading(true);
+
+    try {
+      const { data: tokenData } = await authClient.token();
+      const headers = tokenData?.token ? { authorization: `Bearer ${tokenData.token}` } : {};
+
+      // 1. Fetch User Personal Bookings
+      if (user.id) {
+        const resUserBookings = await fetch(
           `${process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:5000"}/booking/${user.id}`,
-          {
-            headers: tokenData?.token ? { authorization: `Bearer ${tokenData.token}` } : {},
-          }
+          { headers }
         );
-        if (res.ok) {
-          const data = await res.json();
+        if (resUserBookings.ok) {
+          const data = await resUserBookings.json();
           setBookings(Array.isArray(data) ? data : []);
         }
-      } catch (error) {
-        console.error("Failed to fetch dashboard bookings:", error);
-      } finally {
-        setLoadingBookings(false);
       }
+
+      // 2. Fetch Admin Data (If Admin)
+      if (isAdmin) {
+        // Fetch All Users
+        const resUsers = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:5000"}/users`);
+        if (resUsers.ok) {
+          const uData = await resUsers.json();
+          setAllUsers(Array.isArray(uData) ? uData : []);
+        }
+
+        // Fetch All Bookings
+        const resAllBookings = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:5000"}/all-bookings`);
+        if (resAllBookings.ok) {
+          const bData = await resAllBookings.json();
+          setAllBookings(Array.isArray(bData) ? bData : []);
+        }
+
+        // Fetch Destinations Count
+        const resDest = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:5000"}/destination`);
+        if (resDest.ok) {
+          const dData = await resDest.json();
+          setDestinationsCount(Array.isArray(dData) ? dData.length : 0);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchBookings();
-  }, [user]);
+    fetchData();
+  }, [user, isAdmin]);
 
   // Handle Sign Out
   const handleSignOut = async () => {
     await authClient.signOut();
     toast.success("Signed out successfully");
     router.push("/");
+  };
+
+  // Toggle User Role (Admin Action)
+  const handleToggleRole = async (targetUser) => {
+    const newRole = targetUser.role === "admin" ? "user" : "admin";
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:5000"}/users/${targetUser._id || targetUser.id}/role`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role: newRole }),
+        }
+      );
+      if (res.ok) {
+        toast.success(`User role updated to ${newRole.toUpperCase()}`);
+        fetchData();
+      } else {
+        toast.error("Failed to update user role");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("An error occurred");
+    }
   };
 
   if (isPending) {
@@ -95,6 +158,7 @@ const DashboardPage = () => {
     );
   }
 
+  // Personal Metrics
   const totalSpent = bookings.reduce((acc, b) => acc + (Number(b.price) || 0), 0);
   const upcomingBookings = bookings
     .filter(b => b.departureDate)
@@ -103,6 +167,9 @@ const DashboardPage = () => {
   const nextDeparture = upcomingBookings.length > 0 
     ? new Date(upcomingBookings[0].departureDate).toLocaleDateString("en-US", { month: "short", day: "numeric" }) 
     : "No Upcoming Trip";
+
+  // Admin Metrics
+  const grossRevenue = allBookings.reduce((acc, b) => acc + (Number(b.price) || 0), 0);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -113,13 +180,16 @@ const DashboardPage = () => {
 
         <div className="space-y-1 z-10">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-widest bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
-            <HiOutlineSquares2X2 /> Executive Control Portal
+            {isAdmin ? <HiOutlineShieldCheck /> : <HiOutlineSquares2X2 />}
+            <span>{isAdmin ? "Admin Executive Portal" : "Traveler Control Portal"}</span>
           </div>
           <h1 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">
             Welcome back, <span className="text-gradient-cyan">{user.name || "Explorer"}</span>! 👋
           </h1>
           <p className="text-slate-400 text-xs sm:text-sm">
-            Manage your bookings, create new destinations, and update your settings.
+            {isAdmin 
+              ? "Administrator Control Dashboard: Manage platform users, global reservations, and catalog packages." 
+              : "Manage your bookings, explore new destinations, and view your travel metrics."}
           </p>
         </div>
 
@@ -156,18 +226,24 @@ const DashboardPage = () => {
             <div className="min-w-0 flex-1">
               <h3 className="text-sm font-bold text-white truncate">{user.name}</h3>
               <p className="text-[11px] text-slate-400 truncate">{user.email}</p>
-              <span className="inline-flex items-center gap-1 text-[9px] text-emerald-400 font-bold uppercase tracking-wider mt-0.5">
-                <HiOutlineShieldCheck /> VIP Explorer
+              <span className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider mt-0.5 px-2 py-0.5 rounded-full border ${
+                isAdmin 
+                  ? "bg-rose-500/10 text-rose-400 border-rose-500/30" 
+                  : "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+              }`}>
+                {isAdmin ? <HiOutlineShieldCheck /> : <HiOutlineCheckBadge />}
+                <span>{user.role ? user.role.toUpperCase() : "USER"}</span>
               </span>
             </div>
           </div>
 
-          {/* Sidebar Menu Group: Dashboard Navigation */}
+          {/* Sidebar Menu Group */}
           <div className="space-y-1">
             <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-3 block mb-1">
-              Dashboard Navigation
+              {isAdmin ? "Admin Controls" : "User Navigation"}
             </span>
 
+            {/* Overview */}
             <button
               onClick={() => setActiveTab("overview")}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition-all ${
@@ -180,26 +256,73 @@ const DashboardPage = () => {
               <span>Overview</span>
             </button>
 
-            <button
-              onClick={() => setActiveTab("bookings")}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-xs font-bold transition-all ${
-                activeTab === "bookings"
-                  ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/25"
-                  : "text-slate-300 hover:bg-white/5 hover:text-white"
-              }`}
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <HiOutlineBookmark className={`text-base flex-shrink-0 ${activeTab === "bookings" ? "text-white" : "text-cyan-400"}`} />
-                <span className="truncate">My Bookings</span>
-              </div>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ml-1 flex-shrink-0 ${
-                activeTab === "bookings" ? "bg-white/20 text-white" : "bg-cyan-500/10 text-cyan-400"
-              }`}>
-                {bookings.length}
-              </span>
-            </button>
+            {/* Admin View: Users Management */}
+            {isAdmin && (
+              <button
+                onClick={() => setActiveTab("users")}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-xs font-bold transition-all ${
+                  activeTab === "users"
+                    ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/25"
+                    : "text-slate-300 hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <HiOutlineUsers className={`text-base flex-shrink-0 ${activeTab === "users" ? "text-white" : "text-cyan-400"}`} />
+                  <span className="truncate">Manage Users</span>
+                </div>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ml-1 flex-shrink-0 ${
+                  activeTab === "users" ? "bg-white/20 text-white" : "bg-cyan-500/10 text-cyan-400"
+                }`}>
+                  {allUsers.length}
+                </span>
+              </button>
+            )}
 
-            {/* Triggers Add Destination Modal */}
+            {/* Admin View: All System Bookings */}
+            {isAdmin && (
+              <button
+                onClick={() => setActiveTab("all-bookings")}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-xs font-bold transition-all ${
+                  activeTab === "all-bookings"
+                    ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/25"
+                    : "text-slate-300 hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <HiOutlineBookmark className={`text-base flex-shrink-0 ${activeTab === "all-bookings" ? "text-white" : "text-cyan-400"}`} />
+                  <span className="truncate">All Bookings</span>
+                </div>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ml-1 flex-shrink-0 ${
+                  activeTab === "all-bookings" ? "bg-white/20 text-white" : "bg-cyan-500/10 text-cyan-400"
+                }`}>
+                  {allBookings.length}
+                </span>
+              </button>
+            )}
+
+            {/* User View: My Bookings */}
+            {!isAdmin && (
+              <button
+                onClick={() => setActiveTab("bookings")}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-xs font-bold transition-all ${
+                  activeTab === "bookings"
+                    ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/25"
+                    : "text-slate-300 hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <HiOutlineBookmark className={`text-base flex-shrink-0 ${activeTab === "bookings" ? "text-white" : "text-cyan-400"}`} />
+                  <span className="truncate">My Bookings</span>
+                </div>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ml-1 flex-shrink-0 ${
+                  activeTab === "bookings" ? "bg-white/20 text-white" : "bg-cyan-500/10 text-cyan-400"
+                }`}>
+                  {bookings.length}
+                </span>
+              </button>
+            )}
+
+            {/* Add Destination Modal Trigger */}
             <button
               onClick={() => setIsAddModalOpen(true)}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold text-slate-300 hover:bg-white/5 hover:text-white transition-all text-left"
@@ -229,17 +352,21 @@ const DashboardPage = () => {
           {activeTab === "overview" && (
             <div className="space-y-8 animate-in fade-in duration-200">
               
-              {/* Overview Metrics Cards Grid - Fully Responsive Layout */}
+              {/* Metrics Cards Grid (Admin vs User differentiation) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 
                 {/* Metric 1 */}
                 <div className="glass-panel p-4 sm:p-5 rounded-2xl border border-white/10 flex items-center gap-3.5 hover:border-cyan-500/40 transition-all min-w-0">
                   <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 text-xl sm:text-2xl flex-shrink-0">
-                    <HiOutlineBookmark />
+                    {isAdmin ? <HiOutlineUsers /> : <HiOutlineBookmark />}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 block truncate">Reserved Trips</span>
-                    <h3 className="text-lg sm:text-xl font-black text-white truncate">{bookings.length} Packages</h3>
+                    <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 block truncate">
+                      {isAdmin ? "Total Users" : "Reserved Trips"}
+                    </span>
+                    <h3 className="text-lg sm:text-xl font-black text-white truncate">
+                      {isAdmin ? `${allUsers.length} Registered` : `${bookings.length} Packages`}
+                    </h3>
                   </div>
                 </div>
 
@@ -249,30 +376,42 @@ const DashboardPage = () => {
                     <HiOutlineCurrencyDollar />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 block truncate">Total Investment</span>
-                    <h3 className="text-lg sm:text-xl font-black text-cyan-400 truncate">${totalSpent}</h3>
+                    <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 block truncate">
+                      {isAdmin ? "Gross Revenue" : "Total Investment"}
+                    </span>
+                    <h3 className="text-lg sm:text-xl font-black text-cyan-400 truncate">
+                      ${isAdmin ? grossRevenue : totalSpent}
+                    </h3>
                   </div>
                 </div>
 
                 {/* Metric 3 */}
                 <div className="glass-panel p-4 sm:p-5 rounded-2xl border border-white/10 flex items-center gap-3.5 hover:border-cyan-500/40 transition-all min-w-0">
                   <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xl sm:text-2xl flex-shrink-0">
-                    <HiOutlineCalendar />
+                    {isAdmin ? <HiOutlineBookmark /> : <HiOutlineCalendar />}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 block truncate">Next Departure</span>
-                    <h3 className="text-base sm:text-lg font-bold text-emerald-400 truncate">{nextDeparture}</h3>
+                    <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 block truncate">
+                      {isAdmin ? "Global Bookings" : "Next Departure"}
+                    </span>
+                    <h3 className="text-base sm:text-lg font-bold text-emerald-400 truncate">
+                      {isAdmin ? `${allBookings.length} Total` : nextDeparture}
+                    </h3>
                   </div>
                 </div>
 
                 {/* Metric 4 */}
                 <div className="glass-panel p-4 sm:p-5 rounded-2xl border border-white/10 flex items-center gap-3.5 hover:border-cyan-500/40 transition-all min-w-0">
                   <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 text-xl sm:text-2xl flex-shrink-0">
-                    <HiOutlineSparkles />
+                    {isAdmin ? <HiOutlineMap /> : <HiOutlineSparkles />}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 block truncate">Traveler Status</span>
-                    <h3 className="text-base sm:text-lg font-bold text-amber-300 truncate">VIP Voyager</h3>
+                    <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 block truncate">
+                      {isAdmin ? "Catalog Packages" : "Traveler Status"}
+                    </span>
+                    <h3 className="text-base sm:text-lg font-bold text-amber-300 truncate">
+                      {isAdmin ? `${destinationsCount} Active` : "VIP Voyager"}
+                    </h3>
                   </div>
                 </div>
 
@@ -283,25 +422,25 @@ const DashboardPage = () => {
                 <div className="flex items-center justify-between">
                   <h2 className="text-xl font-bold text-white flex items-center gap-2">
                     <span className="w-2 h-5 rounded-full bg-cyan-500" />
-                    Recent Reservations
+                    {isAdmin ? "Recent Platform Reservations" : "Recent Reservations"}
                   </h2>
 
                   <button
-                    onClick={() => setActiveTab("bookings")}
+                    onClick={() => setActiveTab(isAdmin ? "all-bookings" : "bookings")}
                     className="text-xs font-bold text-cyan-400 hover:underline flex items-center gap-1"
                   >
-                    <span>Manage All Bookings</span>
+                    <span>{isAdmin ? "Manage All System Bookings" : "Manage All Bookings"}</span>
                     <HiOutlineArrowRight />
                   </button>
                 </div>
 
-                {loadingBookings ? (
+                {loading ? (
                   <div className="glass-panel p-8 rounded-3xl text-center text-slate-400 animate-pulse">
-                    Loading reservation data...
+                    Loading dashboard data...
                   </div>
-                ) : bookings.length > 0 ? (
+                ) : (isAdmin ? allBookings : bookings).length > 0 ? (
                   <div className="space-y-4">
-                    {bookings.slice(0, 4).map((booking) => (
+                    {(isAdmin ? allBookings : bookings).slice(0, 4).map((booking) => (
                       <div
                         key={booking._id}
                         className="glass-card p-5 rounded-3xl border border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
@@ -351,8 +490,8 @@ const DashboardPage = () => {
             </div>
           )}
 
-          {/* TAB 2: MY BOOKINGS */}
-          {activeTab === "bookings" && (
+          {/* TAB 2: MY BOOKINGS (USER VIEW) */}
+          {!isAdmin && activeTab === "bookings" && (
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
@@ -365,7 +504,7 @@ const DashboardPage = () => {
                 </Link>
               </div>
 
-              {loadingBookings ? (
+              {loading ? (
                 <div className="glass-panel p-16 rounded-3xl text-center text-slate-400 animate-pulse">
                   Loading your bookings...
                 </div>
@@ -437,6 +576,118 @@ const DashboardPage = () => {
             </div>
           )}
 
+          {/* TAB 3: MANAGE USERS (ADMIN VIEW) */}
+          {isAdmin && activeTab === "users" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
+                  <HiOutlineUserGroup className="text-cyan-400" />
+                  System Application Users ({allUsers.length})
+                </h2>
+              </div>
+
+              <div className="glass-panel p-6 rounded-3xl border border-white/10 space-y-4">
+                {allUsers.length > 0 ? (
+                  <div className="space-y-3">
+                    {allUsers.map((u) => (
+                      <div
+                        key={u._id || u.id}
+                        className="glass-card p-4 rounded-2xl border border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                      >
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          {u.image ? (
+                            <img
+                              src={u.image}
+                              alt={u.name}
+                              className="w-10 h-10 rounded-full object-cover border border-cyan-500/50 flex-shrink-0"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-cyan-600 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">
+                              {u.name ? u.name.charAt(0).toUpperCase() : "U"}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <h4 className="text-sm font-bold text-white truncate">{u.name || "User"}</h4>
+                            <p className="text-xs text-slate-400 truncate">{u.email}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-white/10">
+                          <span className={`px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider ${
+                            u.role === "admin" 
+                              ? "bg-rose-500/20 text-rose-400 border border-rose-500/30" 
+                              : "bg-cyan-500/20 text-cyan-400 border border-cyan-500/30"
+                          }`}>
+                            {u.role || "user"}
+                          </span>
+
+                          <button
+                            onClick={() => handleToggleRole(u)}
+                            className="px-3 py-1.5 rounded-xl bg-slate-900 border border-white/10 text-xs font-medium text-slate-200 hover:text-white hover:border-cyan-500/40 transition-all"
+                          >
+                            Toggle Role ({u.role === "admin" ? "Make User" : "Make Admin"})
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-10 text-slate-400 text-sm">
+                    No application users found.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: ALL SYSTEM BOOKINGS (ADMIN VIEW) */}
+          {isAdmin && activeTab === "all-bookings" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
+                  <HiOutlineBookmark className="text-cyan-400" />
+                  All Global Reservations ({allBookings.length})
+                </h2>
+              </div>
+
+              {allBookings.length > 0 ? (
+                <div className="grid grid-cols-1 gap-4">
+                  {allBookings.map((booking) => (
+                    <div
+                      key={booking._id}
+                      className="glass-card p-5 rounded-3xl border border-white/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+                    >
+                      <div className="flex items-center gap-4 min-w-0">
+                        <div className="relative w-20 h-16 rounded-2xl overflow-hidden bg-slate-900 flex-shrink-0">
+                          <Image
+                            src={booking.imageUrl || "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=400&q=80"}
+                            alt={booking.destinationName || "Booking"}
+                            fill
+                            className="object-cover"
+                            unoptimized
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="text-base font-bold text-white line-clamp-1">{booking.destinationName}</h4>
+                          <p className="text-xs text-slate-400 truncate">Booked By User ID: <code className="text-cyan-300">{booking.userId}</code></p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between md:justify-end w-full md:w-auto gap-4 pt-2 md:pt-0 border-t md:border-t-0 border-white/10">
+                        <span className="text-lg font-extrabold text-cyan-400">${booking.price}</span>
+                        <BookingCancelAlert bookingId={booking._id} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="glass-panel p-10 rounded-3xl text-center border border-white/10 text-slate-400 text-sm">
+                  No reservations found in the system.
+                </div>
+              )}
+            </div>
+          )}
+
         </div>
 
       </div>
@@ -446,7 +697,7 @@ const DashboardPage = () => {
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         onSuccess={() => {
-          fetchBookings();
+          fetchData();
         }}
       />
 
