@@ -1,6 +1,4 @@
 import BookingCard from "@/components/BookingCard";
-import { DeleteAlert } from "@/components/DeleteAlert";
-import { EditModal } from "@/components/EditModal";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import Image from "next/image";
@@ -9,7 +7,6 @@ import React from "react";
 import { 
   HiOutlineCalendar, 
   HiOutlineLocationMarker, 
-  HiOutlineTag, 
   HiOutlineArrowLeft,
   HiOutlineCheckCircle,
   HiOutlineShieldCheck
@@ -59,7 +56,6 @@ const DestinationDetailsPage = async ({ params }) => {
   const {
     _id,
     imageUrl,
-    price,
     destinationName,
     duration,
     country,
@@ -86,12 +82,6 @@ const DestinationDetailsPage = async ({ params }) => {
           <HiOutlineArrowLeft className="text-lg" />
           <span>Back to All Destinations</span>
         </Link>
-
-        {/* Action Controls for Admin/Owner */}
-        <div className="flex items-center gap-3">
-          <EditModal destination={destination} />
-          <DeleteAlert destination={destination} />
-        </div>
       </div>
 
       {/* Hero Cover Image Header */}

@@ -3,6 +3,8 @@
 import { authClient } from "@/lib/auth-client";
 import { BookingCancelAlert } from "@/components/BookingCancelAlert";
 import { AddDestinationModal } from "@/components/AddDestinationModal";
+import { EditModal } from "@/components/EditModal";
+import { DeleteAlert } from "@/components/DeleteAlert";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -20,25 +22,28 @@ import {
   HiOutlineArrowRightOnRectangle,
   HiOutlineUsers,
   HiOutlineMap,
-  HiOutlineTrash,
   HiOutlineUserGroup,
-  HiOutlineCheckBadge
+  HiOutlineCheckBadge,
+  HiOutlineFolder
 } from "react-icons/hi2";
 
 const DashboardPage = () => {
   const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
   const user = session?.user;
-  const isAdmin = user?.role === "admin";
 
-  const [activeTab, setActiveTab] = useState("overview"); // "overview" | "bookings" | "users" | "all-bookings"
+  // Live Role state (fetches directly from database)
+  const [userRole, setUserRole] = useState(user?.role || "user");
+  const isAdmin = userRole === "admin" || user?.role === "admin";
+
+  const [activeTab, setActiveTab] = useState("overview"); // "overview" | "bookings" | "my-destinations" | "users" | "all-bookings"
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   
   // Data States
   const [bookings, setBookings] = useState([]);
   const [allBookings, setAllBookings] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
-  const [destinationsCount, setDestinationsCount] = useState(0);
+  const [allDestinations, setAllDestinations] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Private Route Auth Check
@@ -69,28 +74,29 @@ const DashboardPage = () => {
         }
       }
 
-      // 2. Fetch Admin Data (If Admin)
-      if (isAdmin) {
-        // Fetch All Users
-        const resUsers = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:5000"}/users`);
-        if (resUsers.ok) {
-          const uData = await resUsers.json();
-          setAllUsers(Array.isArray(uData) ? uData : []);
-        }
+      // 2. Fetch All Destinations (To filter Owner Destinations)
+      const resDest = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:5000"}/destination`);
+      if (resDest.ok) {
+        const dData = await resDest.json();
+        setAllDestinations(Array.isArray(dData) ? dData : []);
+      }
 
-        // Fetch All Bookings
-        const resAllBookings = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:5000"}/all-bookings`);
-        if (resAllBookings.ok) {
-          const bData = await resAllBookings.json();
-          setAllBookings(Array.isArray(bData) ? bData : []);
-        }
+      // 3. Fetch Admin Data (If Admin)
+      const resUsers = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:5000"}/users`);
+      if (resUsers.ok) {
+        const uData = await resUsers.json();
+        setAllUsers(Array.isArray(uData) ? uData : []);
 
-        // Fetch Destinations Count
-        const resDest = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:5000"}/destination`);
-        if (resDest.ok) {
-          const dData = await resDest.json();
-          setDestinationsCount(Array.isArray(dData) ? dData.length : 0);
+        const matched = uData.find((u) => u.email === user.email);
+        if (matched && matched.role) {
+          setUserRole(matched.role);
         }
+      }
+
+      const resAllBookings = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:5000"}/all-bookings`);
+      if (resAllBookings.ok) {
+        const bData = await resAllBookings.json();
+        setAllBookings(Array.isArray(bData) ? bData : []);
       }
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
@@ -101,7 +107,7 @@ const DashboardPage = () => {
 
   useEffect(() => {
     fetchData();
-  }, [user, isAdmin]);
+  }, [user]);
 
   // Handle Sign Out
   const handleSignOut = async () => {
@@ -158,6 +164,11 @@ const DashboardPage = () => {
     );
   }
 
+  // Filter Owner Destinations (Destinations added by the logged in user)
+  const myAddedDestinations = allDestinations.filter(
+    (d) => d.userId === user.id || d.userEmail === user.email
+  );
+
   // Personal Metrics
   const totalSpent = bookings.reduce((acc, b) => acc + (Number(b.price) || 0), 0);
   const upcomingBookings = bookings
@@ -180,7 +191,7 @@ const DashboardPage = () => {
 
         <div className="space-y-1 z-10">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-widest bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
-            {isAdmin ? <HiOutlineShieldCheck /> : <HiOutlineSquares2X2 />}
+            {isAdmin ? <HiOutlineShieldCheck className="text-rose-400" /> : <HiOutlineSquares2X2 />}
             <span>{isAdmin ? "Admin Executive Portal" : "Traveler Control Portal"}</span>
           </div>
           <h1 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">
@@ -189,7 +200,7 @@ const DashboardPage = () => {
           <p className="text-slate-400 text-xs sm:text-sm">
             {isAdmin 
               ? "Administrator Control Dashboard: Manage platform users, global reservations, and catalog packages." 
-              : "Manage your bookings, explore new destinations, and view your travel metrics."}
+              : "Manage your bookings, edit/delete your published packages, and view travel metrics."}
           </p>
         </div>
 
@@ -228,11 +239,11 @@ const DashboardPage = () => {
               <p className="text-[11px] text-slate-400 truncate">{user.email}</p>
               <span className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider mt-0.5 px-2 py-0.5 rounded-full border ${
                 isAdmin 
-                  ? "bg-rose-500/10 text-rose-400 border-rose-500/30" 
+                  ? "bg-rose-500/10 text-rose-400 border-rose-500/30 font-extrabold" 
                   : "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
               }`}>
                 {isAdmin ? <HiOutlineShieldCheck /> : <HiOutlineCheckBadge />}
-                <span>{user.role ? user.role.toUpperCase() : "USER"}</span>
+                <span>{userRole.toUpperCase()}</span>
               </span>
             </div>
           </div>
@@ -254,6 +265,46 @@ const DashboardPage = () => {
             >
               <HiOutlineSquares2X2 className={`text-base flex-shrink-0 ${activeTab === "overview" ? "text-white" : "text-cyan-400"}`} />
               <span>Overview</span>
+            </button>
+
+            {/* Owner Tab: My Added Destinations */}
+            <button
+              onClick={() => setActiveTab("my-destinations")}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-xs font-bold transition-all ${
+                activeTab === "my-destinations"
+                  ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/25"
+                  : "text-slate-300 hover:bg-white/5 hover:text-white"
+              }`}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <HiOutlineFolder className={`text-base flex-shrink-0 ${activeTab === "my-destinations" ? "text-white" : "text-cyan-400"}`} />
+                <span className="truncate">My Added Packages</span>
+              </div>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ml-1 flex-shrink-0 ${
+                activeTab === "my-destinations" ? "bg-white/20 text-white" : "bg-cyan-500/10 text-cyan-400"
+              }`}>
+                {myAddedDestinations.length}
+              </span>
+            </button>
+
+            {/* User View: My Bookings */}
+            <button
+              onClick={() => setActiveTab("bookings")}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-xs font-bold transition-all ${
+                activeTab === "bookings"
+                  ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/25"
+                  : "text-slate-300 hover:bg-white/5 hover:text-white"
+              }`}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <HiOutlineBookmark className={`text-base flex-shrink-0 ${activeTab === "bookings" ? "text-white" : "text-cyan-400"}`} />
+                <span className="truncate">My Bookings</span>
+              </div>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ml-1 flex-shrink-0 ${
+                activeTab === "bookings" ? "bg-white/20 text-white" : "bg-cyan-500/10 text-cyan-400"
+              }`}>
+                {bookings.length}
+              </span>
             </button>
 
             {/* Admin View: Users Management */}
@@ -300,28 +351,6 @@ const DashboardPage = () => {
               </button>
             )}
 
-            {/* User View: My Bookings */}
-            {!isAdmin && (
-              <button
-                onClick={() => setActiveTab("bookings")}
-                className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-xs font-bold transition-all ${
-                  activeTab === "bookings"
-                    ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/25"
-                    : "text-slate-300 hover:bg-white/5 hover:text-white"
-                }`}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <HiOutlineBookmark className={`text-base flex-shrink-0 ${activeTab === "bookings" ? "text-white" : "text-cyan-400"}`} />
-                  <span className="truncate">My Bookings</span>
-                </div>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ml-1 flex-shrink-0 ${
-                  activeTab === "bookings" ? "bg-white/20 text-white" : "bg-cyan-500/10 text-cyan-400"
-                }`}>
-                  {bookings.length}
-                </span>
-              </button>
-            )}
-
             {/* Add Destination Modal Trigger */}
             <button
               onClick={() => setIsAddModalOpen(true)}
@@ -352,7 +381,7 @@ const DashboardPage = () => {
           {activeTab === "overview" && (
             <div className="space-y-8 animate-in fade-in duration-200">
               
-              {/* Metrics Cards Grid (Admin vs User differentiation) */}
+              {/* Metrics Cards Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 
                 {/* Metric 1 */}
@@ -403,14 +432,14 @@ const DashboardPage = () => {
                 {/* Metric 4 */}
                 <div className="glass-panel p-4 sm:p-5 rounded-2xl border border-white/10 flex items-center gap-3.5 hover:border-cyan-500/40 transition-all min-w-0">
                   <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 text-xl sm:text-2xl flex-shrink-0">
-                    {isAdmin ? <HiOutlineMap /> : <HiOutlineSparkles />}
+                    <HiOutlineFolder />
                   </div>
                   <div className="min-w-0 flex-1">
                     <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 block truncate">
-                      {isAdmin ? "Catalog Packages" : "Traveler Status"}
+                      My Added Packages
                     </span>
                     <h3 className="text-base sm:text-lg font-bold text-amber-300 truncate">
-                      {isAdmin ? `${destinationsCount} Active` : "VIP Voyager"}
+                      {myAddedDestinations.length} Published
                     </h3>
                   </div>
                 </div>
@@ -490,8 +519,99 @@ const DashboardPage = () => {
             </div>
           )}
 
-          {/* TAB 2: MY BOOKINGS (USER VIEW) */}
-          {!isAdmin && activeTab === "bookings" && (
+          {/* TAB 2: MY ADDED DESTINATIONS (OWNER MANAGEMENT) */}
+          {activeTab === "my-destinations" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
+                  <HiOutlineFolder className="text-cyan-400" />
+                  My Published Packages ({myAddedDestinations.length})
+                </h2>
+
+                <button
+                  onClick={() => setIsAddModalOpen(true)}
+                  className="glossy-btn px-4 py-2 rounded-xl text-xs font-bold w-full sm:w-auto text-center"
+                >
+                  + Add New Destination
+                </button>
+              </div>
+
+              {loading ? (
+                <div className="glass-panel p-16 rounded-3xl text-center text-slate-400 animate-pulse">
+                  Loading your packages...
+                </div>
+              ) : myAddedDestinations.length > 0 ? (
+                <div className="grid grid-cols-1 gap-6">
+                  {myAddedDestinations.map((dest) => (
+                    <div
+                      key={dest._id}
+                      className="glass-card p-6 rounded-3xl border border-white/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 hover:border-cyan-500/40 transition-all"
+                    >
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 w-full md:w-auto min-w-0">
+                        <div className="relative w-full sm:w-48 h-36 rounded-2xl overflow-hidden bg-slate-900 flex-shrink-0">
+                          <Image
+                            src={dest.imageUrl || "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=400&q=80"}
+                            alt={dest.destinationName || "Destination"}
+                            fill
+                            className="object-cover"
+                            unoptimized
+                          />
+                        </div>
+
+                        <div className="space-y-2 text-left min-w-0 flex-1">
+                          <span className="inline-flex items-center gap-1 px-3 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                            {dest.category || "Luxury"}
+                          </span>
+
+                          <h3 className="text-xl sm:text-2xl font-extrabold text-white truncate">
+                            {dest.destinationName}
+                          </h3>
+
+                          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300 font-medium">
+                            <span className="text-cyan-400 font-semibold">{dest.country}</span>
+                            <span className="text-slate-500">|</span>
+                            <span>{dest.duration}</span>
+                            <span className="text-slate-500">|</span>
+                            <span className="text-slate-400 truncate">
+                              ID: <code className="text-xs bg-slate-900 px-2 py-0.5 rounded text-cyan-300 font-mono">{dest._id}</code>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Owner Action Buttons: EDIT & DELETE */}
+                      <div className="flex items-center justify-between md:justify-end w-full md:w-auto pt-4 md:pt-0 border-t md:border-t-0 border-white/10 gap-3">
+                        <div className="text-left md:text-right mr-2">
+                          <span className="text-xs text-slate-400 font-medium block">Price</span>
+                          <span className="text-2xl font-black text-cyan-400">${dest.price}</span>
+                        </div>
+
+                        <EditModal destination={dest} onSuccess={fetchData} />
+                        <DeleteAlert destination={dest} onSuccess={fetchData} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="glass-panel p-12 rounded-3xl text-center border border-white/10 space-y-4 max-w-lg mx-auto">
+                  <HiOutlineFolder className="text-4xl text-cyan-400 mx-auto" />
+                  <h3 className="text-xl font-bold text-white">No published packages yet</h3>
+                  <p className="text-slate-400 text-sm">
+                    You haven't added any travel destinations yet. Click below to add your first package.
+                  </p>
+                  <button
+                    onClick={() => setIsAddModalOpen(true)}
+                    className="glossy-btn inline-block px-6 py-3 rounded-2xl text-xs font-bold shadow-lg shadow-cyan-500/25"
+                  >
+                    Add First Destination Package
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 3: MY BOOKINGS (USER VIEW) */}
+          {activeTab === "bookings" && (
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
@@ -576,7 +696,7 @@ const DashboardPage = () => {
             </div>
           )}
 
-          {/* TAB 3: MANAGE USERS (ADMIN VIEW) */}
+          {/* TAB 4: MANAGE USERS (ADMIN VIEW) */}
           {isAdmin && activeTab === "users" && (
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="flex items-center justify-between">
@@ -640,7 +760,7 @@ const DashboardPage = () => {
             </div>
           )}
 
-          {/* TAB 4: ALL SYSTEM BOOKINGS (ADMIN VIEW) */}
+          {/* TAB 5: ALL SYSTEM BOOKINGS (ADMIN VIEW) */}
           {isAdmin && activeTab === "all-bookings" && (
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="flex items-center justify-between">

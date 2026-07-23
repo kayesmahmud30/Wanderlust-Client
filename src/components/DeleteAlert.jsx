@@ -3,9 +3,9 @@
 import { useRouter } from "next/navigation";
 import React, { useState } from "react";
 import toast from "react-hot-toast";
-import { HiOutlineTrash, HiOutlineExclamationTriangle, HiOutlineX } from "react-icons/hi2";
+import { HiOutlineTrash, HiOutlineExclamationTriangle } from "react-icons/hi2";
 
-export function DeleteAlert({ destination }) {
+export function DeleteAlert({ destination, onSuccess }) {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -25,7 +25,11 @@ export function DeleteAlert({ destination }) {
       if (res.ok) {
         toast.success("Destination deleted permanently.");
         setIsOpen(false);
-        router.push("/destinations");
+        if (onSuccess) {
+          onSuccess();
+        } else {
+          router.push("/destinations");
+        }
       } else {
         const data = await res.json();
         toast.error(data?.message || "Failed to delete destination.");
@@ -42,10 +46,10 @@ export function DeleteAlert({ destination }) {
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="px-4 py-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 text-xs font-bold flex items-center gap-1.5 transition-all shadow-md"
+        className="px-3.5 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 text-xs font-bold flex items-center gap-1.5 transition-all shadow-md"
       >
         <HiOutlineTrash className="text-base" />
-        <span>Delete Package</span>
+        <span>Delete</span>
       </button>
 
       {isOpen && (

@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import toast from "react-hot-toast";
 import { HiOutlinePencilAlt, HiOutlineX } from "react-icons/hi";
 
-export function EditModal({ destination }) {
+export function EditModal({ destination, onSuccess }) {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -40,7 +40,11 @@ export function EditModal({ destination }) {
       if (res.ok) {
         toast.success("Destination updated successfully!");
         setIsOpen(false);
-        window.location.reload();
+        if (onSuccess) {
+          onSuccess();
+        } else {
+          window.location.reload();
+        }
       } else {
         const errorData = await res.json();
         toast.error(errorData?.message || "Failed to update destination");
@@ -57,10 +61,10 @@ export function EditModal({ destination }) {
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="px-4 py-2 rounded-xl glass-panel text-slate-200 hover:text-cyan-400 border border-white/10 hover:border-cyan-500/40 text-xs font-bold flex items-center gap-1.5 transition-all shadow-md"
+        className="px-3.5 py-1.5 rounded-xl glass-panel text-slate-200 hover:text-cyan-400 border border-white/10 hover:border-cyan-500/40 text-xs font-bold flex items-center gap-1.5 transition-all shadow-md"
       >
         <HiOutlinePencilAlt className="text-base text-cyan-400" />
-        <span>Edit Package</span>
+        <span>Edit</span>
       </button>
 
       {isOpen && (
