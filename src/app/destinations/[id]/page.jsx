@@ -12,6 +12,8 @@ import {
   HiOutlineShieldCheck
 } from "react-icons/hi";
 
+export const dynamic = "force-dynamic";
+
 const DestinationDetailsPage = async ({ params }) => {
   const { id } = await params;
   

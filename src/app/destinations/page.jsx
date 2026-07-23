@@ -2,6 +2,8 @@ import DestinationCard from "@/components/DestinationCard";
 import React from "react";
 import DestinationsClientView from "./DestinationsClientView";
 
+export const dynamic = "force-dynamic";
+
 const DestinationsPage = async () => {
   let destinations = [];
   try {

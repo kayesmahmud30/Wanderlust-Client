@@ -13,6 +13,8 @@ import {
   HiOutlineArrowRight
 } from "react-icons/hi";
 
+export const dynamic = "force-dynamic";
+
 const MyBookingPage = async () => {
   let session = null;
   let token = "";
