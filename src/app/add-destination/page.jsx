@@ -1,167 +1,230 @@
 "use client";
 
-import {
-  Button,
-  Card,
-  FieldError,
-  Form,
-  Input,
-  Label,
-  ListBox,
-  Select,
-  TextArea,
-  TextField,
-} from "@heroui/react";
-import React from "react";
+import React, { useState } from "react";
+import toast from "react-hot-toast";
+import { useRouter } from "next/navigation";
+import { 
+  HiOutlinePlusCircle, 
+  HiOutlineLocationMarker, 
+  HiOutlineGlobe, 
+  HiOutlineTag, 
+  HiOutlineCurrencyDollar, 
+  HiOutlineCalendar, 
+  HiOutlinePhotograph, 
+  HiOutlineDocumentText,
+  HiSparkles
+} from "react-icons/hi";
+
+const categories = ["Beach", "Mountain", "City", "Adventure", "Cultural", "Luxury"];
 
 const AddDestinationPage = () => {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [category, setCategory] = useState("Beach");
+
   const onSubmit = async (e) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const destination = Object.fromEntries(formData.entries());
-    console.log(destination);
+    setLoading(true);
 
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_SERVER_URL}/destination`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(destination),
-      },
-    );
-    const data = await res.json();
+    try {
+      const formData = new FormData(e.currentTarget);
+      const destination = Object.fromEntries(formData.entries());
+      destination.category = category;
+      destination.price = Number(destination.price);
 
-    // TODO: Add Toaster.
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:5000"}/destination`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(destination),
+        }
+      );
+
+      if (res.ok) {
+        toast.success("✨ Destination package added successfully!");
+        router.push("/destinations");
+      } else {
+        const data = await res.json();
+        toast.error(data?.message || "Failed to create destination");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("An error occurred while creating the destination");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="p-5 max-w-7xl mx-auto">
-      <h1 className="text-2xl font-bold">Add Destination</h1>
-      <Card>
-        <form onSubmit={onSubmit} className="p-10 space-y-8 w-3xl">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      
+      {/* Header */}
+      <div className="text-center space-y-3 mb-10">
+        <span className="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 inline-flex items-center gap-1.5">
+          <HiSparkles /> Admin Concierge
+        </span>
+        <h1 className="text-3xl sm:text-5xl font-extrabold text-white tracking-tight">
+          Add New <span className="text-gradient-cyan">Destination</span>
+        </h1>
+        <p className="text-slate-400 text-sm sm:text-base max-w-xl mx-auto">
+          Publish a new luxury getaway or adventure package to the Wanderlust global catalog.
+        </p>
+      </div>
+
+      {/* Form Card */}
+      <div className="glass-panel p-6 sm:p-10 rounded-3xl border border-white/10 shadow-2xl backdrop-blur-2xl">
+        <form onSubmit={onSubmit} className="space-y-8">
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            
             {/* Destination Name */}
-            <div className="md:col-span-2">
-              <TextField name="destinationName" isRequired>
-                <Label>Destination Name</Label>
-                <Input placeholder="Bali Paradise" className="rounded-2xl" />
-                <FieldError />
-              </TextField>
+            <div className="sm:col-span-2 space-y-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                <HiOutlineLocationMarker className="text-cyan-400 text-base" />
+                Destination Name
+              </label>
+              <input
+                type="text"
+                name="destinationName"
+                placeholder="e.g. Bali Tropical Paradise Sanctuary"
+                required
+                className="w-full glass-input px-4 py-3.5 rounded-2xl text-sm text-white placeholder-slate-500 focus:outline-none"
+              />
             </div>
 
             {/* Country */}
-            <TextField name="country" isRequired>
-              <Label>Country</Label>
-              <Input placeholder="Indonesia" className="rounded-2xl" />
-              <FieldError />
-            </TextField>
-
-            {/* Category - Updated Select Component */}
-            <div>
-              <Select
-                name="category"
-                isRequired
-                className="w-full"
-                placeholder="Select category"
-              >
-                <Label>Category</Label>
-                <Select.Trigger className="rounded-2xl">
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    <ListBox.Item id="Beach" textValue="Beach">
-                      Beach
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                    <ListBox.Item id="Mountain" textValue="Mountain">
-                      Mountain
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                    <ListBox.Item id="City" textValue="City">
-                      City
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                    <ListBox.Item id="Adventure" textValue="Adventure">
-                      Adventure
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                    <ListBox.Item id="Cultural" textValue="Cultural">
-                      Cultural
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                    <ListBox.Item id="Luxury" textValue="Luxury">
-                      Luxury
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                  </ListBox>
-                </Select.Popover>
-              </Select>
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                <HiOutlineGlobe className="text-cyan-400 text-base" />
+                Country
+              </label>
+              <input
+                type="text"
+                name="country"
+                placeholder="e.g. Indonesia"
+                required
+                className="w-full glass-input px-4 py-3.5 rounded-2xl text-sm text-white placeholder-slate-500 focus:outline-none"
+              />
             </div>
 
-            {/* Price */}
-            <TextField name="price" type="number" isRequired>
-              <Label>Price (USD)</Label>
-              <Input type="number" placeholder="1299" className="rounded-2xl" />
-              <FieldError />
-            </TextField>
+            {/* Category Select */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                <HiOutlineTag className="text-cyan-400 text-base" />
+                Category
+              </label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full glass-input px-4 py-3.5 rounded-2xl text-sm text-white focus:outline-none cursor-pointer"
+              >
+                {categories.map((cat) => (
+                  <option key={cat} value={cat} className="bg-slate-900 text-white">
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Price (USD) */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                <HiOutlineCurrencyDollar className="text-cyan-400 text-base" />
+                Price per Person (USD)
+              </label>
+              <input
+                type="number"
+                name="price"
+                placeholder="e.g. 1499"
+                required
+                min="1"
+                className="w-full glass-input px-4 py-3.5 rounded-2xl text-sm text-white placeholder-slate-500 focus:outline-none"
+              />
+            </div>
 
             {/* Duration */}
-            <TextField name="duration" isRequired>
-              <Label>Duration</Label>
-              <Input placeholder="7 Days / 6 Nights" className="rounded-2xl" />
-              <FieldError />
-            </TextField>
-
-            {/* Departure Date */}
-            <div className="md:col-span-2">
-              <TextField name="departureDate" type="date" isRequired>
-                <Label>Departure Date</Label>
-                <Input type="date" className="rounded-2xl" />
-                <FieldError />
-              </TextField>
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                <HiOutlineCalendar className="text-cyan-400 text-base" />
+                Duration
+              </label>
+              <input
+                type="text"
+                name="duration"
+                placeholder="e.g. 7 Days / 6 Nights"
+                required
+                className="w-full glass-input px-4 py-3.5 rounded-2xl text-sm text-white placeholder-slate-500 focus:outline-none"
+              />
             </div>
 
-            {/* Image URL - Removed preview */}
-            <div className="md:col-span-2">
-              <TextField name="imageUrl" isRequired>
-                <Label>Image URL</Label>
-                <Input
-                  type="url"
-                  placeholder="https://example.com/bali-paradise.jpg"
-                  className="rounded-2xl"
-                />
-                <FieldError />
-              </TextField>
+            {/* Departure Date */}
+            <div className="sm:col-span-2 space-y-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                <HiOutlineCalendar className="text-cyan-400 text-base" />
+                Scheduled Departure Date
+              </label>
+              <input
+                type="date"
+                name="departureDate"
+                required
+                className="w-full glass-input px-4 py-3.5 rounded-2xl text-sm text-white focus:outline-none cursor-pointer"
+              />
+            </div>
+
+            {/* Image URL */}
+            <div className="sm:col-span-2 space-y-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                <HiOutlinePhotograph className="text-cyan-400 text-base" />
+                Image URL
+              </label>
+              <input
+                type="url"
+                name="imageUrl"
+                placeholder="https://images.unsplash.com/photo-..."
+                required
+                className="w-full glass-input px-4 py-3.5 rounded-2xl text-sm text-white placeholder-slate-500 focus:outline-none"
+              />
             </div>
 
             {/* Description */}
-            <div className="md:col-span-2">
-              <TextField name="description" isRequired>
-                <Label>Description</Label>
-                <TextArea
-                  placeholder="Describe the travel experience..."
-                  className="rounded-3xl"
-                />
-                <FieldError />
-              </TextField>
+            <div className="sm:col-span-2 space-y-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                <HiOutlineDocumentText className="text-cyan-400 text-base" />
+                Experience Description
+              </label>
+              <textarea
+                name="description"
+                rows="4"
+                placeholder="Describe the unique features, activities, and highlights of this package..."
+                required
+                className="w-full glass-input px-4 py-3.5 rounded-2xl text-sm text-white placeholder-slate-500 focus:outline-none resize-none"
+              />
             </div>
+
           </div>
 
-          {/* Buttons */}
-
-          <Button
+          {/* Submit Button */}
+          <button
             type="submit"
-            variant="outline"
-            className=" rounded-none w-full bg-cyan-500 text-white"
+            disabled={loading}
+            className="w-full glossy-btn py-4 rounded-2xl text-base font-bold flex items-center justify-center gap-2 shadow-xl shadow-cyan-500/25 disabled:opacity-50"
           >
-            Add Destination
-          </Button>
+            {loading ? (
+              <span>Publishing Destination...</span>
+            ) : (
+              <>
+                <HiOutlinePlusCircle className="text-xl" />
+                <span>Publish Destination Package</span>
+              </>
+            )}
+          </button>
+
         </form>
-      </Card>
+      </div>
+
     </div>
   );
 };

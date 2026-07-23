@@ -1,59 +1,89 @@
 "use client";
 
 import { authClient } from "@/lib/auth-client";
-import { TrashBin } from "@gravity-ui/icons";
-import { AlertDialog, Button } from "@heroui/react";
+import React, { useState } from "react";
+import toast from "react-hot-toast";
+import { HiOutlineTrash, HiOutlineExclamationTriangle } from "react-icons/hi2";
 
 export function BookingCancelAlert({ bookingId }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
   const handleCancelBooking = async () => {
-    const { data: tokenData } = await authClient.token();
+    setLoading(true);
+    try {
+      const { data: tokenData } = await authClient.token();
 
-    const res = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/booking/${bookingId}`, {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-        authorization: `Bearer ${tokenData.token}`,
-      },
-    });
+      const res = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:5000"}/booking/${bookingId}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          authorization: `Bearer ${tokenData?.token}`,
+        },
+      });
 
-    const data = await res.json();
-    window.location.reload();
+      if (res.ok) {
+        toast.success("Booking cancelled successfully.");
+        setIsOpen(false);
+        window.location.reload();
+      } else {
+        const errorData = await res.json();
+        toast.error(errorData?.message || "Failed to cancel booking.");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error cancelling booking.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <AlertDialog>
-      <Button
-        className={"rounded-none border-red-500 text-red-500"}
-        variant="outline"
+    <>
+      <button
+        onClick={() => setIsOpen(true)}
+        className="px-4 py-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 text-xs font-bold flex items-center gap-1.5 transition-all shadow-md"
       >
-        <TrashBin /> Cancel
-      </Button>
-      <AlertDialog.Backdrop>
-        <AlertDialog.Container>
-          <AlertDialog.Dialog className="sm:max-w-[400px]">
-            <AlertDialog.CloseTrigger />
-            <AlertDialog.Header>
-              <AlertDialog.Icon status="danger" />
-              <AlertDialog.Heading>
-                Cancel Booking permanently?
-              </AlertDialog.Heading>
-            </AlertDialog.Header>
-            <AlertDialog.Body></AlertDialog.Body>
-            <AlertDialog.Footer>
-              <Button slot="close" variant="tertiary">
-                Cancel
-              </Button>
-              <Button
-                onClick={handleCancelBooking}
-                slot="close"
-                variant="danger"
+        <HiOutlineTrash className="text-base" />
+        <span>Cancel Reservation</span>
+      </button>
+
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md glass-panel p-6 sm:p-8 rounded-3xl border border-rose-500/30 shadow-2xl space-y-6 text-center">
+            
+            <div className="w-16 h-16 rounded-full bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 mx-auto text-3xl">
+              <HiOutlineExclamationTriangle />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-xl font-bold text-white">Cancel Booking?</h3>
+              <p className="text-sm text-slate-300">
+                Are you sure you want to cancel this reservation? This will remove your booking pass permanently.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="px-5 py-2.5 rounded-xl glass-panel text-slate-300 hover:text-white text-xs font-semibold"
               >
-                Delete
-              </Button>
-            </AlertDialog.Footer>
-          </AlertDialog.Dialog>
-        </AlertDialog.Container>
-      </AlertDialog.Backdrop>
-    </AlertDialog>
+                Keep Booking
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelBooking}
+                disabled={loading}
+                className="px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-600/30 disabled:opacity-50 transition-all"
+              >
+                {loading ? "Cancelling..." : "Confirm Cancellation"}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+    </>
   );
 }
