@@ -1,5 +1,6 @@
 "use client";
 
+import { authClient } from "@/lib/auth-client";
 import React, { useState } from "react";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
@@ -19,6 +20,8 @@ const categories = ["Beach", "Mountain", "City", "Adventure", "Cultural", "Luxur
 
 const AddDestinationPage = () => {
   const router = useRouter();
+  const { data: session } = authClient.useSession();
+  const user = session?.user;
   const [loading, setLoading] = useState(false);
   const [category, setCategory] = useState("Beach");
 
@@ -31,6 +34,8 @@ const AddDestinationPage = () => {
       const destination = Object.fromEntries(formData.entries());
       destination.category = category;
       destination.price = Number(destination.price);
+      destination.userId = user?.id;
+      destination.userEmail = user?.email;
 
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:5000"}/destination`,

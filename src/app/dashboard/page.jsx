@@ -164,10 +164,13 @@ const DashboardPage = () => {
     );
   }
 
-  // Filter Owner Destinations (Destinations added by the logged in user)
-  const myAddedDestinations = allDestinations.filter(
-    (d) => d.userId === user.id || d.userEmail === user.email
-  );
+  // Filter Owner Destinations (Destinations added by logged in user, or all catalog packages for admin)
+  const myAddedDestinations = allDestinations.filter((d) => {
+    if (d.userId || d.userEmail) {
+      return d.userId === user.id || d.userEmail === user.email || isAdmin;
+    }
+    return true;
+  });
 
   // Personal Metrics
   const totalSpent = bookings.reduce((acc, b) => acc + (Number(b.price) || 0), 0);
